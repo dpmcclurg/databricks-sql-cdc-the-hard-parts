@@ -1,0 +1,56 @@
+resources:
+  pipelines:
+    bronze_ingestion_scd2:
+      name: sqlserver_to_bronze_scd2
+      # SCD Type 2 connector target. Writes to the bronze_scd2 schema so it can coexist with the
+      # SCD1 bronze. Deploy this and set --var bronze_schema=bronze_scd2.
+      # The source tables are keyless heaps (no declared PRIMARY KEY). table_configuration.primary_keys
+      # below is the ASSUMED logical key, not a source constraint: required so the connector does not
+      # fall back to an all-columns bundled key (which silently drops UPDATEs). See experiments E11.
+      continuous: false
+      catalog: ${var.catalog}       # DPM requires catalog + schema at the spec level
+      schema: bronze_scd2           # default publishing schema; objects set destination_schema too
+      ingestion_definition:
+        ingestion_gateway_id: ${resources.pipelines.sqlserver_gateway.id}
+        objects:
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: account          # date-less: sequence_by autodetects to LSN -> NULL timestamp
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze_scd2
+              table_configuration:
+                scd_type: SCD_TYPE_2
+                primary_keys: [hmy]
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: property          # has modified_at: usable as sequence_by
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze_scd2
+              table_configuration:
+                scd_type: SCD_TYPE_2
+                primary_keys: [hmy]
+                sequence_by: [modified_at]
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: tenant            # date-less
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze_scd2
+              table_configuration:
+                scd_type: SCD_TYPE_2
+                primary_keys: [hmy]
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: lease
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze_scd2
+              table_configuration:
+                scd_type: SCD_TYPE_2
+                primary_keys: [property_hmy, tenant_hmy]
+                sequence_by: [modified_at]
+# Confirm whether table_configuration accepts sequence_by and its exact key name on the
+# installed CLI version. The account/tenant tables intentionally omit it to reproduce the
+# LSN-autodetect / NULL-timestamp behavior.

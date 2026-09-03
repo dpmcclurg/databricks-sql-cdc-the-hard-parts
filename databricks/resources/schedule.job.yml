@@ -1,0 +1,22 @@
+resources:
+  jobs:
+    testbed_5min:
+      name: testbed_bronze_silver_5min
+      # Triggered cadence: the ingestion pipeline does not run continuously.
+      # PAUSED by default so a bundle deploy does not silently arm a 5-minute meter; unpause in the
+      # workspace (or set pause_status: UNPAUSED) when actively demonstrating the scheduled cadence.
+      trigger:
+        pause_status: PAUSED
+        periodic:
+          interval: 5
+          unit: MINUTES
+      tasks:
+        - task_key: bronze
+          pipeline_task:
+            # Variant A: point this at bronze_ingestion_scd2 instead.
+            pipeline_id: ${resources.pipelines.bronze_ingestion.id}
+        - task_key: silver
+          depends_on:
+            - task_key: bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.silver_scd2.id}

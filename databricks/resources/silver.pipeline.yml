@@ -1,0 +1,13 @@
+resources:
+  pipelines:
+    silver_scd2:
+      name: silver_scd2
+      serverless: true
+      catalog: ${var.catalog}
+      schema: silver
+      configuration:
+        catalog: ${var.catalog}
+        bronze_schema: ${var.bronze_schema}
+      libraries:
+        - file:
+            path: ../src/silver_scd2.py

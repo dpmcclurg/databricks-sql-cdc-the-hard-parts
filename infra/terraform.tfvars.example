@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location        = "eastus"
+
+# sql_server_name must be globally unique.
+sql_server_name           = "sqlcdc-testbed-srv-XXXX"
+sql_database_name         = "cdctest"
+databricks_workspace_name = "sqlcdc-testbed-dbx"
+
+# Leave sql_admin_password empty to auto-generate; read it back with:
+#   terraform output -raw sql_admin_password
+sql_admin_login    = "sqladmin"
+sql_admin_password = ""
+
+# Your workstation public IP (curl ifconfig.me) to run the SQL scripts locally. Optional.
+client_ip = ""

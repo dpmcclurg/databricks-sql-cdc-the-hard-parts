@@ -1,0 +1,52 @@
+resources:
+  pipelines:
+    bronze_ingestion:
+      name: sqlserver_to_bronze_scd1
+      # Ingestion pipeline is triggered only; the testbed_5min job schedules it.
+      # The source tables are keyless heaps (no declared PRIMARY KEY). table_configuration.primary_keys
+      # below is the ASSUMED logical key, not a source constraint: it is required so the connector does
+      # not fall back to an all-columns bundled key (which silently drops UPDATEs). See experiments E11.
+      continuous: false
+      catalog: ${var.catalog}       # DPM requires catalog + schema at the spec level
+      schema: bronze                # default publishing schema; objects set destination_schema too
+      ingestion_definition:
+        ingestion_gateway_id: ${resources.pipelines.sqlserver_gateway.id}
+        objects:
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: account
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze
+              table_configuration:
+                scd_type: SCD_TYPE_1
+                primary_keys: [hmy]
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: property
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze
+              table_configuration:
+                scd_type: SCD_TYPE_1
+                primary_keys: [hmy]
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: tenant
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze
+              table_configuration:
+                scd_type: SCD_TYPE_1
+                primary_keys: [hmy]
+          - table:
+              source_catalog: ${var.sqldb_name}
+              source_schema: dbo
+              source_table: lease
+              destination_catalog: ${var.catalog}
+              destination_schema: bronze
+              table_configuration:
+                scd_type: SCD_TYPE_1
+                primary_keys: [property_hmy, tenant_hmy]
+# Confirm the exact table_configuration schema (scd_type / primary_keys keys)
+# against `databricks pipelines create --help` on the installed CLI version.

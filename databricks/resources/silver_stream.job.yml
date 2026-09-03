@@ -1,0 +1,36 @@
+resources:
+  jobs:
+    silver_stream_job:
+      name: silver_stream_scd2
+      # Streaming SCD2 / variant 04 (triggered): runs the standalone Structured Streaming silver (readChangeFeed +
+      # schemaTrackingLocation + foreachBatch SCD2 MERGE) as a triggered job. availableNow drains available
+      # change data and stops, so each run mirrors the triggered cadence of the LDP variants. Serverless
+      # notebook task.
+      tasks:
+        - task_key: silver_stream
+          notebook_task:
+            notebook_path: ../notebooks/04_streaming_scd2/04a_capture_changes.py
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              mode: triggered
+
+    silver_stream_continuous_job:
+      name: silver_stream_continuous
+      # Streaming SCD2 / variant 04 (continuous): the SAME notebook run always-on. The `continuous` trigger keeps exactly one
+      # run active at all times and restarts it on failure, so the streams stay up with a processingTime
+      # micro-batch trigger for low-latency SCD2 apply. This is the only variant that can run continuously
+      # today (the LDP variants are triggered-only). Pause this job around a planned bronze full refresh:
+      # the refresh jams the CDF stream (see docs/experiments.md E8/E9), and auto-restart would otherwise
+      # loop on the jam until the checkpoint is reset.
+      continuous:
+        pause_status: PAUSED
+      tasks:
+        - task_key: silver_stream
+          notebook_task:
+            notebook_path: ../notebooks/04_streaming_scd2/04a_capture_changes.py
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              mode: continuous
+              processing_time: 10 seconds

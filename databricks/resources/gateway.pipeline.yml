@@ -1,0 +1,29 @@
+resources:
+  pipelines:
+    sqlserver_gateway:
+      name: sqlserver_gateway
+      # The gateway runs continuously on classic compute; it stages CDC into a UC Volume.
+      # catalog/schema must match gateway_storage_* (DPM auto-sets them; declare so redeploys
+      # don't try to unset 'schema', which direct publishing mode forbids).
+      catalog: ${var.catalog}
+      schema: ingestion_staging
+      # Publish the pipeline event log to a UC table so identities other than the
+      # pipeline owner can read gateway health with a plain SELECT (the event_log()
+      # TVF is owner-only).
+      event_log:
+        catalog: ${var.catalog}
+        schema: ingestion_staging
+        name: gateway_event_log
+      # The gateway is single-node by design. Pin the node type to a family that has vCPU quota
+      # in this subscription/region. In Central US here, v5 families (DDSv5/Dv5/DASv5) are at
+      # limit 0, so the service default wedges in WAITING_FOR_RESOURCES; D4ds_v4 (DDSv4, limit 10,
+      # 4 vCPU) has quota and fits the ~6 free regional vCPUs. Applied up front to skip the wedge.
+      clusters:
+        - label: default
+          node_type_id: Standard_D4ds_v4
+          num_workers: 0
+      gateway_definition:
+        connection_name: ${var.sqlserver_connection}
+        gateway_storage_catalog: ${var.catalog}
+        gateway_storage_schema: ingestion_staging
+        gateway_storage_name: sqlserver_gateway_storage

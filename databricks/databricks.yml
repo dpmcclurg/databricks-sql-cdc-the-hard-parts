@@ -1,0 +1,28 @@
+bundle:
+  name: databricks-azure-sql-cdc
+
+variables:
+  catalog:
+    # Workspace-specific: this is the auto-provisioned Default-Storage managed catalog for this
+    # workspace (from `databricks catalogs list`). On a fresh deploy the name differs; set it here.
+    description: UC catalog for all testbed data.
+    default: sqlcdc_testbed_dbx01_7405609436951225
+  bronze_schema:
+    description: Schema silver reads its CDF from. "bronze" (Variant B, SCD1) or "bronze_scd2" (Variant A).
+    default: bronze
+  sqlserver_connection:
+    description: Name of the UC connection to the Azure SQL DB (create via CLI, see README.md).
+    default: sqlserver_conn
+  sqldb_name:
+    description: Source database name in Azure SQL (used as source_catalog for the connector).
+    default: cdctest
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-7405609436951225.5.azuredatabricks.net

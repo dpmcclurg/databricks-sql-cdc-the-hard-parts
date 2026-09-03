@@ -1,0 +1,17 @@
+resources:
+  pipelines:
+    silver_a:
+      name: silver_a_scd2
+      # Variant A downstream: durable SCD2 via AUTO CDC off the SCD2 connector target's (bronze_scd2)
+      # change feed. Full fidelity (every connector version), durable across a bronze_scd2 full refresh
+      # (recover with reset_checkpoint_selection). Used to test E6: is a content-hash reconcile needed
+      # beyond AUTO CDC idempotency + reset_checkpoint_selection?
+      serverless: true
+      catalog: ${var.catalog}
+      schema: silver_a
+      configuration:
+        catalog: ${var.catalog}
+        bronze_scd2_schema: bronze_scd2
+      libraries:
+        - file:
+            path: ../src/silver_a_scd2.py
