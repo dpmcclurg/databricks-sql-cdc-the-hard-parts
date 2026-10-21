@@ -30,13 +30,15 @@ def build(table, keys):
     def _changes():
         # Stream the bronze table's change feed; keep insert / update_postimage / delete.
         # NOTE on full refresh: a bronze FULL REFRESH emits a read-incompatible schema change
-        # (SET TBLPROPERTIES / DLT SETUP) that fails this stream with
+        # (SET TBLPROPERTIES / DLT SETUP) that fails the next normal run of this stream with
         # DELTA_STREAMING_INCOMPATIBLE_SCHEMA_CHANGE. The standalone-streaming fix
         # (.option("schemaTrackingLocation", ...)) is NOT usable here: LDP requires the schema log to
-        # live under the pipeline-managed checkpoint (DELTA_STREAMING_SCHEMA_LOCATION_NOT_UNDER_CHECKPOINT),
-        # a per-flow path with a reset counter that cannot be hardcoded. So in this LDP Variant B, a
-        # bronze full refresh forces a silver full refresh (history resets). Treat bronze full refresh
-        # as a deliberate re-baseline, not routine. See docs/experiments.md (E3, E4, E10).
+        # live under the pipeline-managed checkpoint (DELTA_STREAMING_SCHEMA_LOCATION_NOT_UNDER_CHECKPOINT).
+        # Recover with reset_checkpoint_selection on this pipeline's flows: it clears the flow
+        # checkpoints, KEEPS the silver data, and re-reads bronze; AUTO CDC idempotency opens no
+        # spurious versions, so history is preserved. Never full-refresh silver to recover (that
+        # clears the table and collapses history to one version per key). See
+        # notebooks/01_changefeed_scd2/01b_full_refresh.py and docs/experiments.md (E3, E10).
         return (
             spark.readStream
             .option("readChangeFeed", "true")
