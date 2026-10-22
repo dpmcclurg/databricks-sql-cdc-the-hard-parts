@@ -1,0 +1,26 @@
+resources:
+  jobs:
+    # Run this job in place of a direct Silver pipeline trigger.
+    silver_recovery:
+      name: silver_recovery
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: reset
+          notebook_task:
+            notebook_path: ../notebooks/recover.py
+            base_parameters: &recover_params
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              silver_schema: ${var.silver_schema}
+              ops_schema: ${var.ops_schema}
+              tables: ${var.tables}
+              silver_pipeline_id: ${resources.pipelines.silver_history.id}
+              mode: reset
+        - task_key: tombstone
+          depends_on:
+            - task_key: reset
+          notebook_task:
+            notebook_path: ../notebooks/recover.py
+            base_parameters:
+              <<: *recover_params
+              mode: tombstone

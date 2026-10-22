@@ -1,0 +1,22 @@
+resources:
+  jobs:
+    backfill_events:
+      name: backfill_events
+      parameters:
+        - name: table
+          default: ""
+        - name: legacy_table
+          default: ""
+        - name: out_table
+          default: ""
+      tasks:
+        - task_key: events
+          notebook_task:
+            notebook_path: ../notebooks/backfill_events.py
+            base_parameters:
+              catalog: ${var.catalog}
+              bronze_schema: ${var.bronze_schema}
+              tables: ${var.tables}
+              table: "{{job.parameters.table}}"
+              legacy_table: "{{job.parameters.legacy_table}}"
+              out_table: "{{job.parameters.out_table}}"

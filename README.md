@@ -44,7 +44,7 @@ Variants 01–04 all key on the assumed `hmy`, on the same seeded source, each i
 
 - **01 · change-feed SCD2 (primary):** SCD Type 1 bronze (connector target) plus a decoupled SCD Type 2 silver built with AUTO CDC from bronze's change feed, sequenced by `_commit_timestamp`. Readable dates on a date-less source; net-change-per-interval fidelity; full-refresh recovery via `reset_checkpoint_selection`.
 - **02 · snapshot SCD2:** the same SCD Type 1 bronze, but silver built with AUTO CDC *from snapshot* off bronze's current state. Survives a connector full refresh with **zero** intervention; processing-time validity dates.
-- **03 · SCD2-bronze:** SCD Type 2 connector target plus a decoupled SCD Type 2 silver off its change feed. Full per-change fidelity; the content-hash refresh reconcile turns out to be redundant.
+- **03 · SCD2-bronze:** SCD Type 2 connector target plus a decoupled SCD Type 2 silver off its change feed. Full per-change fidelity; the content-hash refresh reconcile turns out to be redundant. On SCD Type 2 bronze a source delete is a version close, not a delete event, so this silver misses deletes; see [`patterns/refresh-safe-scd2-silver`](patterns/refresh-safe-scd2-silver) for a delete-aware, refresh-safe version.
 - **04 · streaming SCD2:** a standalone Structured Streaming silver (outside LDP). The only variant that can run **continuously / always-on** today; costs a hand-written MERGE and a per-refresh checkpoint reset.
 
 ### Keyless-heap strategies (the assumed key may not hold)
@@ -76,6 +76,7 @@ databricks/   the DAB: gateway + bronze ingestion (SCD1 and SCD2) + silver build
                 01_changefeed_scd2  02_snapshot_scd2  03_scd2_bronze  04_streaming_scd2
                 05_assumed_key_dq   06_content_hash   07_append_log   08_comparison
 docs/         experiments.md — the running experiment log
+patterns/     refresh-safe-scd2-silver — tested SCD2 silver over SCD2 bronze: deletes, full refresh, migration
 ```
 
 ## Prerequisites
