@@ -55,7 +55,7 @@ R, and deletes at R for keys the legacy table still had open but Bronze no longe
 ## Deploy
 
 ```bash
-# set catalog, schemas, and the tables JSON in a target of databricks.yml, then
+# add a target with the schemas and tables JSON to databricks.yml (see the comment there), then
 databricks bundle deploy -t <target> --var catalog=<catalog>
 databricks bundle run silver_setup -t <target>     # tombstone and pin tables
 databricks bundle run silver_recovery -t <target>  # schedule this instead of the pipeline
