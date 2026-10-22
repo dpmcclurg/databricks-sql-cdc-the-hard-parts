@@ -81,7 +81,7 @@
   job silver_recovery ['tombstone']: SUCCESS {'reset': None, 'tombstone': '{"detail": 2}'}
   [PASS] S3 tombstones = exactly the window deletes {6, 7} [6, 7]
   [PASS] S3 window deletes closed 
-  [PASS] S3 delete after the pin closed at its real time, not the refresh time end=2026-10-21T22:03:56.000Z refresh=2026-10-21T22:01:36.000Z
+  [PASS] S3 delete after the pin closed at its real time, not the refresh time end=2026-10-22T01:59:52.000Z refresh=2026-10-22T01:56:26.000Z
   [PASS] S3 insert after the pin is open, not tombstoned 
   [PASS] S3 untouched gldetail closed its delete via the normal path 
   [PASS] S3 no tombstones for untouched gldetail 
@@ -139,4 +139,35 @@
   [PASS] S7 silver_migrated.detail I4 intervals ordered, no overlap violations=0
   [PASS] S7 silver_migrated.detail I5 no spurious versions violations=0
 
-93/93 checks passed
+
+# S8 rerun on its own: the first attempt hit a transient API retry timeout in the test driver before any check ran.
+### S8 Bronze table deleted and rebuilt (recovery for a source table dropped and recreated)
+  job silver_setup: SUCCESS {'setup': None}
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  pipeline emulated_bronze {'full_refresh_selection': ['detail']}: COMPLETED
+  [PASS] S8 Bronze rebuilt with a new table identity state=COMPLETED id_changed=True
+  pipeline silver_history: FAILED
+  [PASS] S8 INFO normal Silver run right after the rebuild state=FAILED error=Update 1364cf is FAILED since flow '<catalog>.silver.detail' has failed.
+  job silver_recovery: SUCCESS {'reset': '{"detail": "table recreated"}', 'tombstone': '{"detail": 1}'}
+  [PASS] S8 identity check alone detects the rebuilt table {'detail': 'table recreated'}
+  [PASS] S8 outage delete closed by a tombstone 
+  [PASS] S8 outage update opened one new version 2
+  [PASS] S8 version count = before + 1 (the update) 10109 -> 10110
+  pipeline emulated_bronze: COMPLETED
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  [PASS] S8 next run is a normal update (nothing re-detected) {'reset': '{}', 'tombstone': '{}'}
+  [PASS] S8 delete after recovery closed at its real time end=2026-10-22T14:41:38.000Z refresh=2026-10-22T14:38:19.000Z
+  [PASS] S8 silver.detail I1 one open version per key violations=0
+  [PASS] S8 silver.detail I2 open keys = live source keys violations=0
+  [PASS] S8 silver.detail I3 open values = source values violations=0
+  [PASS] S8 silver.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S8 silver.detail I5 no spurious versions violations=0
+  [PASS] S8 silver.gldetail I1 one open version per key violations=0
+  [PASS] S8 silver.gldetail I2 open keys = live source keys violations=0
+  [PASS] S8 silver.gldetail I3 open values = source values violations=0
+  [PASS] S8 silver.gldetail I4 intervals ordered, no overlap violations=0
+  [PASS] S8 silver.gldetail I5 no spurious versions violations=0
+
+18/18 checks passed
+
+111/111 checks passed (S0-S7 93/93 in the full run, S8 18/18)

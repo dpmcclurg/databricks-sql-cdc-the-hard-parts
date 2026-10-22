@@ -54,7 +54,7 @@
 | S3 | snapshot row deleted before the reset stays closed after the re-read | PASS |  |
 | S3 | tombstones = exactly the window deletes {6, 7} | PASS | [6, 7] |
 | S3 | window deletes closed | PASS |  |
-| S3 | delete after the pin closed at its real time, not the refresh time | PASS | end=2026-10-21T22:03:56.000Z refresh=2026-10-21T22:01:36.000Z |
+| S3 | delete after the pin closed at its real time, not the refresh time | PASS | end=2026-10-22T01:59:52.000Z refresh=2026-10-22T01:56:26.000Z |
 | S3 | insert after the pin is open, not tombstoned | PASS |  |
 | S3 | untouched gldetail closed its delete via the normal path | PASS |  |
 | S3 | no tombstones for untouched gldetail | PASS |  |
@@ -93,3 +93,21 @@
 | S7 | silver_migrated.detail I3 open values = source values | PASS | violations=0 |
 | S7 | silver_migrated.detail I4 intervals ordered, no overlap | PASS | violations=0 |
 | S7 | silver_migrated.detail I5 no spurious versions | PASS | violations=0 |
+| S8 | Bronze rebuilt with a new table identity | PASS | state=COMPLETED id_changed=True |
+| S8 | INFO normal Silver run right after the rebuild | PASS | state=FAILED error=Update 1364cf is FAILED since flow '<catalog>.silver.detail' has failed. |
+| S8 | identity check alone detects the rebuilt table | PASS | {'detail': 'table recreated'} |
+| S8 | outage delete closed by a tombstone | PASS |  |
+| S8 | outage update opened one new version | PASS | 2 |
+| S8 | version count = before + 1 (the update) | PASS | 10109 -> 10110 |
+| S8 | next run is a normal update (nothing re-detected) | PASS | {'reset': '{}', 'tombstone': '{}'} |
+| S8 | delete after recovery closed at its real time | PASS | end=2026-10-22T14:41:38.000Z refresh=2026-10-22T14:38:19.000Z |
+| S8 | silver.detail I1 one open version per key | PASS | violations=0 |
+| S8 | silver.detail I2 open keys = live source keys | PASS | violations=0 |
+| S8 | silver.detail I3 open values = source values | PASS | violations=0 |
+| S8 | silver.detail I4 intervals ordered, no overlap | PASS | violations=0 |
+| S8 | silver.detail I5 no spurious versions | PASS | violations=0 |
+| S8 | silver.gldetail I1 one open version per key | PASS | violations=0 |
+| S8 | silver.gldetail I2 open keys = live source keys | PASS | violations=0 |
+| S8 | silver.gldetail I3 open values = source values | PASS | violations=0 |
+| S8 | silver.gldetail I4 intervals ordered, no overlap | PASS | violations=0 |
+| S8 | silver.gldetail I5 no spurious versions | PASS | violations=0 |

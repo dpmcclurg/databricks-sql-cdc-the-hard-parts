@@ -87,7 +87,7 @@ open values equal source values; intervals ordered without overlap; no spurious 
 | S7 | Full refresh of the migrated table re-runs the seed and reproduces it exactly | 6/6 |
 | S8 | Bronze table deleted and rebuilt (the recovery when a source table is dropped and recreated), with an update and a delete while ingestion was down. The table-ID check alone detects it; the delete is tombstoned, the update opens one version, and a later delete closes at its real time | 18/18 |
 
-**93 of 93 checks passed.** Every check, with its measured value, is in `tests/report.md`; the run log is `tests/evidence.log`. Run it yourself with `tests/reset_env.sh <profile> <catalog>` then `uv run --with databricks-sdk python tests/run_matrix.py <profile> <catalog>`.
+**111 of 111 checks passed.** Every check, with its measured value, is in `tests/report.md`; the run log is `tests/evidence.log`. Run it yourself with `tests/reset_env.sh <profile> <catalog>` then `uv run --with databricks-sdk python tests/run_matrix.py <profile> <catalog>`.
 
 ### Assumptions about the real connector
 
