@@ -6,8 +6,10 @@
 #   mode=tombstone For each pin not yet processed, close Silver keys that are open but no longer
 #                  live in the pinned Bronze version (deleted inside the refresh window), then
 #                  run a normal Silver update to apply them.
-# A refresh is detected from a DLT REFRESH entry in the Bronze table's history, or, as a
-# fallback, from Silver's last update failing with a streaming schema-change error on that flow.
+# A refresh is detected from a DLT REFRESH entry in the Bronze table's history, from a change in
+# the Bronze table's Unity Catalog ID (the table was deleted and rebuilt, the recovery for a source
+# table that was dropped and recreated), or, as a fallback, from Silver's last update failing with
+# a streaming schema-change or different-table error on that flow.
 import json
 import time
 
@@ -15,7 +17,7 @@ from databricks.sdk import WorkspaceClient
 
 for w_ in ("catalog", "bronze_schema", "silver_schema", "ops_schema", "tables", "silver_pipeline_id", "mode"):
     dbutils.widgets.text(w_, "")
-dbutils.widgets.text("detect", "history,failure")  # tests set "failure" to exercise the fallback alone
+dbutils.widgets.text("detect", "history,identity,failure")  # tests narrow this to exercise one signal
 CAT = dbutils.widgets.get("catalog")
 BRONZE = f"{CAT}.{dbutils.widgets.get('bronze_schema')}"
 SILVER = f"{CAT}.{dbutils.widgets.get('silver_schema')}"
@@ -46,7 +48,7 @@ def schema_change_failures(update):
         if not (e.origin and e.origin.update_id == update.update_id and e.origin.flow_name):
             continue
         text = (e.message or "") + json.dumps(e.as_dict().get("error", {}))
-        if "INCOMPATIBLE_SCHEMA_CHANGE" in text or "METADATA_EVOLUTION" in text:
+        if any(m in text for m in ("INCOMPATIBLE_SCHEMA_CHANGE", "METADATA_EVOLUTION", "DIFFERENT_DELTA_TABLE")):
             t = e.origin.flow_name.split(".")[-1]
             if t in TABLES:
                 hits.add(t)
@@ -61,12 +63,18 @@ if MODE == "reset":
     failed = [u for u in updates if u.creation_time > last_ok_ms and u.state and u.state.value == "FAILED"]
     by_failure = set().union(*[schema_change_failures(u) for u in failed]) if failed else set()
 
+    known = {r.bronze_table: r.table_id for r in spark.table(f"{OPS}.bronze_identity").collect()}
+    current = {t: w.tables.get(f"{BRONZE}.{t}").table_id for t in TABLES}
+
     refreshed = {}
     for t in TABLES:
-        hist = spark.sql(f"DESCRIBE HISTORY {BRONZE}.{t}").where(f"timestamp > timestamp_millis({last_ok_ms})")
+        full_hist = spark.sql(f"DESCRIBE HISTORY {BRONZE}.{t}")
+        hist = full_hist.where(f"timestamp > timestamp_millis({last_ok_ms})")
         marker = (hist.where("operation = 'DLT REFRESH'").orderBy("version", ascending=False).first()
                   if "history" in DETECT else None)
-        if marker:
+        if "identity" in DETECT and t in known and known[t] != current[t]:
+            refreshed[t] = ((marker or full_hist.orderBy("version").first()).timestamp, "table recreated")
+        elif marker:
             refreshed[t] = (marker.timestamp, "DLT REFRESH")
         elif "failure" in DETECT and t in by_failure:
             first = hist.where(f"operation IN {REFRESH_OPS}").orderBy("version").first()
@@ -82,6 +90,13 @@ if MODE == "reset":
         run_silver({"reset_checkpoint_selection": [f"{SILVER}.{t}" for t in refreshed]})
     else:
         run_silver()
+    # record identities only after Silver has caught up, so a failed run is detected again on retry
+    spark.createDataFrame(list(current.items()), "bronze_table STRING, table_id STRING") \
+        .createOrReplaceTempView("current_identity")
+    spark.sql(f"""MERGE INTO {OPS}.bronze_identity i USING current_identity c ON i.bronze_table = c.bronze_table
+                  WHEN MATCHED THEN UPDATE SET table_id = c.table_id, recorded_at = current_timestamp()
+                  WHEN NOT MATCHED THEN INSERT (bronze_table, table_id, recorded_at)
+                  VALUES (c.bronze_table, c.table_id, current_timestamp())""")
     dbutils.notebook.exit(json.dumps({t: v[1] for t, v in refreshed.items()}))
 
 # COMMAND ----------

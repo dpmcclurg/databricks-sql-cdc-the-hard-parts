@@ -335,7 +335,49 @@ def s7():
     invariants("S7", "detail", "silver_migrated")
 
 
-ALL = ["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]
+def last_error(key):
+    for e in w.pipelines.list_pipeline_events(pipeline_id=ID[key], max_results=50, filter="level='ERROR'"):
+        return (e.message or "")[:200]
+
+
+def s8():
+    print("\n### S8 Bronze table deleted and rebuilt (recovery for a source table dropped and recreated)")
+    D, B = f"{CAT}.source.src_detail", f"{CAT}.bronze.detail"
+    run_job("silver_setup")                                   # adds bronze_identity to an existing deployment
+    run_job("silver_recovery")                                # records the current Bronze identities
+    before = total("detail")
+    old_id = w.tables.get(B).table_id
+    # source changes while ingestion is down, never ingested before the rebuild
+    sql(f"UPDATE {D} SET val = 'outage' WHERE id = 11")
+    sql(f"DELETE FROM {D} WHERE id = 12")
+    sql(f"DROP TABLE {B}")
+    mark_snapshot("detail")
+    st = run_pipeline("emulated_bronze", full_refresh_selection=["detail"])
+    new_id = w.tables.get(B).table_id
+    check("S8", "Bronze rebuilt with a new table identity", st == "COMPLETED" and new_id != old_id,
+          f"state={st} id_changed={new_id != old_id}")
+    st = run_pipeline("silver_history")
+    check("S8", "INFO normal Silver run right after the rebuild", True, f"state={st} error={last_error('silver_history')}")
+    status, out = run_job("silver_recovery", params={"detect": "identity"})
+    detected = json.loads(out.get("reset") or "{}")
+    check("S8", "identity check alone detects the rebuilt table", detected == {"detail": "table recreated"}, detected)
+    refresh_time = one(f"SELECT max(refresh_time) FROM {CAT}.silver_ops.refresh_pins WHERE bronze_table = 'detail'")
+    check("S8", "outage delete closed by a tombstone", not is_open("detail", 12)
+          and 12 in [int(r[0]) for r in sql(f"SELECT id FROM {CAT}.silver_ops.detail_tombstones")])
+    check("S8", "outage update opened one new version", versions("detail", 11) == 2, versions("detail", 11))
+    check("S8", "version count = before + 1 (the update)", total("detail") == before + 1, f"{before} -> {total('detail')}")
+    sql(f"DELETE FROM {D} WHERE id = 13")
+    run_pipeline("emulated_bronze")
+    status, out = run_job("silver_recovery")
+    check("S8", "next run is a normal update (nothing re-detected)", json.loads(out.get("reset") or "{}") == {}, out)
+    end13 = one(f"SELECT max(__END_AT) FROM {CAT}.silver.detail WHERE id = 13")
+    check("S8", "delete after recovery closed at its real time", end13 is not None and end13 > refresh_time,
+          f"end={end13} refresh={refresh_time}")
+    invariants("S8", "detail")
+    invariants("S8", "gldetail")
+
+
+ALL = ["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"]
 for step in (ALL if STEPS == "all" else STEPS.split(",")):
     try:
         globals()[step]()

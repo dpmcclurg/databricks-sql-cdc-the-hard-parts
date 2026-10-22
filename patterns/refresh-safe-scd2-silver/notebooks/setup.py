@@ -1,6 +1,7 @@
 # Databricks notebook source
 # One-time setup: Silver and ops schemas, one tombstone table per Silver table (same key and
-# column types as Bronze), and the refresh_pins table used by the recovery job. Idempotent.
+# column types as Bronze), and the refresh_pins and bronze_identity tables used by the recovery
+# job. Idempotent.
 import json
 
 for w_ in ("catalog", "bronze_schema", "silver_schema", "ops_schema", "tables"):
@@ -20,4 +21,6 @@ for t, cfg in TABLES.items():
                   FROM {BRONZE}.{t} WHERE false""")
 spark.sql(f"""CREATE TABLE IF NOT EXISTS {OPS}.refresh_pins (bronze_table STRING, refresh_time TIMESTAMP,
               pin_version BIGINT, detected_by STRING, recorded_at TIMESTAMP, tombstoned BOOLEAN)""")
+spark.sql(f"""CREATE TABLE IF NOT EXISTS {OPS}.bronze_identity (bronze_table STRING, table_id STRING,
+              recorded_at TIMESTAMP)""")
 print("setup complete:", list(TABLES))

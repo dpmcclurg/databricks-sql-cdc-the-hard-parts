@@ -40,7 +40,8 @@ Silver tables set `pipelines.reset.allowed = false`; the checkpoint reset still 
 **`silver_recovery` job** (`notebooks/recover.py`): run it in place of triggering Silver directly.
 
 1. **reset**: find Bronze tables refreshed since Silver's last successful update (a `DLT REFRESH`
-   entry in the table history, or Silver's last update failing with a streaming schema-change
+   entry in the table history; a changed Unity Catalog table ID, meaning the table was deleted and
+   rebuilt; or Silver's last update failing with a streaming schema-change or different-table
    error on that table), record a pin (refresh time and current Bronze version), and start Silver
    with `reset_checkpoint_selection` on those tables' main flows. With nothing refreshed, run a
    normal update.
@@ -84,8 +85,9 @@ open values equal source values; intervals ordered without overlap; no spurious 
 | S5 | Recovery job re-run twice: nothing changes | 1/1 |
 | S6 | Migrate a legacy Silver (the original change-feed flow, which misses deletes) through the ONCE seed: pre-refresh history carried over, missed deletes closed | 9/9 |
 | S7 | Full refresh of the migrated table re-runs the seed and reproduces it exactly | 6/6 |
+| S8 | Bronze table deleted and rebuilt (the recovery when a source table is dropped and recreated), with an update and a delete while ingestion was down. The table-ID check alone detects it; the delete is tombstoned, the update opens one version, and a later delete closes at its real time | 18/18 |
 
-**93 of 93 checks passed.** Every check, with its measured value, is in `tests/report.md`; the run log is `tests/evidence.log`. Run it yourself with `tests/reset_env.sh <profile> <catalog>` then `uv run --with databricks-sdk python tests/run_matrix.py <profile> <catalog>`.
+**111 of 111 checks passed.** Every check, with its measured value, is in `tests/report.md`; the run log is `tests/evidence.log`. Run it yourself with `tests/reset_env.sh <profile> <catalog>` then `uv run --with databricks-sdk python tests/run_matrix.py <profile> <catalog>`.
 
 ### Assumptions about the real connector
 
@@ -107,5 +109,8 @@ connector behaviors are assumed, with the evidence for each:
   missed by the tombstone step. Running Bronze triggered, in the same job before Silver, removes it.
 - The successor check reads Bronze for each micro-batch that contains closes; on very large tables,
   watch its cost and keep Bronze clustered or Z-ordered on the key.
+- A source table dropped and recreated under an existing destination is not a supported connector
+  operation; the recovery is to delete the Bronze table and let the connector rebuild it, which this
+  pattern then handles like a refresh. Keep the outage short: the whole outage is the refresh window.
 - Silver should track the same columns Bronze keeps history on (the connector default is all
   columns), or a subset of them.
