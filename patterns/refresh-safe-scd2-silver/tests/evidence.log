@@ -1,0 +1,142 @@
+
+### S0 initial build (snapshot rows carry NULL __cdc_timestamp_value)
+  pipeline emulated_bronze: COMPLETED
+  job silver_setup: SUCCESS {'setup': None}
+  pipeline emulated_bronze: COMPLETED
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  pipeline legacy_silver: COMPLETED
+  [PASS] S0 bronze.detail snapshot rows have NULL cdc timestamp 10000/10000
+  [PASS] S0 silver.detail builds one version per key 10000/10000
+  [PASS] S0 silver.detail START never NULL 
+  [PASS] S0 silver.detail I1 one open version per key violations=0
+  [PASS] S0 silver.detail I2 open keys = live source keys violations=0
+  [PASS] S0 silver.detail I3 open values = source values violations=0
+  [PASS] S0 silver.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S0 silver.detail I5 no spurious versions violations=0
+  [PASS] S0 bronze.gldetail snapshot rows have NULL cdc timestamp 5000/5000
+  [PASS] S0 silver.gldetail builds one version per key 5000/5000
+  [PASS] S0 silver.gldetail START never NULL 
+  [PASS] S0 silver.gldetail I1 one open version per key violations=0
+  [PASS] S0 silver.gldetail I2 open keys = live source keys violations=0
+  [PASS] S0 silver.gldetail I3 open values = source values violations=0
+  [PASS] S0 silver.gldetail I4 intervals ordered, no overlap violations=0
+  [PASS] S0 silver.gldetail I5 no spurious versions violations=0
+
+### S1 steady state: update, 5-update burst, delete, delete+reinsert, bulk update
+  pipeline emulated_bronze: COMPLETED
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  pipeline legacy_silver: COMPLETED
+  [PASS] S1 update: key 1 has 2 versions 2
+  [PASS] S1 burst: key 2 has 6 versions (every change kept) 6
+  [PASS] S1 delete: key 3 closed 
+  [PASS] S1 delete + reinsert: key 4 has 2 versions with a gap versions=2 gaps=1
+  [PASS] S1 bulk update: 100 keys x 2 versions 200
+  [PASS] S1 INFO legacy silver_scd2 on SCD2 Bronze leaves deleted key 3 open expected True (documents the problem the pattern fixes)
+  [PASS] S1 silver.detail I1 one open version per key violations=0
+  [PASS] S1 silver.detail I2 open keys = live source keys violations=0
+  [PASS] S1 silver.detail I3 open values = source values violations=0
+  [PASS] S1 silver.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S1 silver.detail I5 no spurious versions violations=0
+  [PASS] S1 silver.gldetail I1 one open version per key violations=0
+  [PASS] S1 silver.gldetail I2 open keys = live source keys violations=0
+  [PASS] S1 silver.gldetail I3 open values = source values violations=0
+  [PASS] S1 silver.gldetail I4 intervals ordered, no overlap violations=0
+  [PASS] S1 silver.gldetail I5 no spurious versions violations=0
+
+### S2 planned full refresh of all Bronze tables, Silver fully caught up
+  pipeline emulated_bronze {'full_refresh': True}: COMPLETED
+  pipeline silver_history: FAILED
+  [PASS] S2 INFO normal Silver run right after the refresh state=FAILED (column-mapped detail expected to fail)
+  job silver_recovery: SUCCESS {'reset': '{"detail": "silver schema-change failure"}', 'tombstone': '{"detail": 0}'}
+  [PASS] S2 fallback detection (Silver schema-change failure) finds detail {'detail': 'silver schema-change failure'}
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  [PASS] S2 recovery job completes {'reset': '{}', 'tombstone': '{}'}
+  pipeline legacy_silver reset: COMPLETED
+  pipeline legacy_silver: COMPLETED
+  [PASS] S2 silver.detail version count unchanged by refresh 10107 -> 10107
+  [PASS] S2 no tombstones for detail (nothing deleted in window) 0
+  [PASS] S2 silver.detail I1 one open version per key violations=0
+  [PASS] S2 silver.detail I2 open keys = live source keys violations=0
+  [PASS] S2 silver.detail I3 open values = source values violations=0
+  [PASS] S2 silver.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S2 silver.detail I5 no spurious versions violations=0
+  [PASS] S2 silver.gldetail version count unchanged by refresh 5000 -> 5000
+  [PASS] S2 no tombstones for gldetail (nothing deleted in window) 0
+  [PASS] S2 silver.gldetail I1 one open version per key violations=0
+  [PASS] S2 silver.gldetail I2 open keys = live source keys violations=0
+  [PASS] S2 silver.gldetail I3 open values = source values violations=0
+  [PASS] S2 silver.gldetail I4 intervals ordered, no overlap violations=0
+  [PASS] S2 silver.gldetail I5 no spurious versions violations=0
+
+### S3 table-level refresh (detail only) with changes in the refresh window + changes after the pin
+  pipeline emulated_bronze: COMPLETED
+  pipeline emulated_bronze {'full_refresh_selection': ['detail']}: COMPLETED
+  pipeline emulated_bronze: COMPLETED
+  job silver_recovery ['reset']: SUCCESS {'reset': '{"detail": "DLT REFRESH"}', 'tombstone': None}
+  [PASS] S3 reset detects only the refreshed table {'detail': 'DLT REFRESH'}
+  [PASS] S3 window delete still open after reset (expected gap) 
+  [PASS] S3 snapshot row deleted before the reset stays closed after the re-read 
+  pipeline emulated_bronze: COMPLETED
+  pipeline silver_history: COMPLETED
+  job silver_recovery ['tombstone']: SUCCESS {'reset': None, 'tombstone': '{"detail": 2}'}
+  [PASS] S3 tombstones = exactly the window deletes {6, 7} [6, 7]
+  [PASS] S3 window deletes closed 
+  [PASS] S3 delete after the pin closed at its real time, not the refresh time end=2026-10-21T22:03:56.000Z refresh=2026-10-21T22:01:36.000Z
+  [PASS] S3 insert after the pin is open, not tombstoned 
+  [PASS] S3 untouched gldetail closed its delete via the normal path 
+  [PASS] S3 no tombstones for untouched gldetail 
+  pipeline legacy_silver reset: COMPLETED
+  pipeline legacy_silver: COMPLETED
+  [PASS] S3 silver.detail I1 one open version per key violations=0
+  [PASS] S3 silver.detail I2 open keys = live source keys violations=0
+  [PASS] S3 silver.detail I3 open values = source values violations=0
+  [PASS] S3 silver.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S3 silver.detail I5 no spurious versions violations=0
+  [PASS] S3 silver.gldetail I1 one open version per key violations=0
+  [PASS] S3 silver.gldetail I2 open keys = live source keys violations=0
+  [PASS] S3 silver.gldetail I3 open values = source values violations=0
+  [PASS] S3 silver.gldetail I4 intervals ordered, no overlap violations=0
+  [PASS] S3 silver.gldetail I5 no spurious versions violations=0
+
+### S4 source adds a column; a change touches only the new column
+  pipeline emulated_bronze: COMPLETED
+  [PASS] S4 Bronze absorbs the added column COMPLETED
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  [PASS] S4 Silver run completes {'reset': '{}', 'tombstone': '{}'}
+  [PASS] S4 Bronze opened a version for the note-only change 2
+  [PASS] S4 Silver (explicit columns) opened no spurious version 1
+  pipeline legacy_silver: COMPLETED
+  [PASS] S4 silver.detail I1 one open version per key violations=0
+  [PASS] S4 silver.detail I2 open keys = live source keys violations=0
+  [PASS] S4 silver.detail I3 open values = source values violations=0
+  [PASS] S4 silver.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S4 silver.detail I5 no spurious versions violations=0
+
+### S5 recovery job re-run is idempotent
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  job silver_recovery: SUCCESS {'reset': '{}', 'tombstone': '{}'}
+  [PASS] S5 versions, pins, tombstones unchanged after two re-runs (10109, 5000, 2, 2) -> (10109, 5000, 2, 2)
+
+### S6 migrate the legacy Silver onto the pattern through the ONCE seed
+  legacy events: 10106
+  pipeline silver_history_migrated {'full_refresh': True}: COMPLETED
+  [PASS] S6 migrated pipeline builds COMPLETED
+  [PASS] S6 legacy history from before Bronze's refresh carried over missing=0
+  [PASS] S6 deletes the legacy table missed are closed (keys 3, 6, 7) 
+  [PASS] S6 snapshot rows deleted after the refresh stay closed (keys 8, 9) 
+  [PASS] S6 silver_migrated.detail I1 one open version per key violations=0
+  [PASS] S6 silver_migrated.detail I2 open keys = live source keys violations=0
+  [PASS] S6 silver_migrated.detail I3 open values = source values violations=0
+  [PASS] S6 silver_migrated.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S6 silver_migrated.detail I5 no spurious versions violations=0
+
+### S7 a full refresh of the migrated table re-runs the seed and reproduces it exactly
+  pipeline silver_history_migrated {'full_refresh': True}: COMPLETED
+  [PASS] S7 identical after re-seed rows 10105 -> 10105
+  [PASS] S7 silver_migrated.detail I1 one open version per key violations=0
+  [PASS] S7 silver_migrated.detail I2 open keys = live source keys violations=0
+  [PASS] S7 silver_migrated.detail I3 open values = source values violations=0
+  [PASS] S7 silver_migrated.detail I4 intervals ordered, no overlap violations=0
+  [PASS] S7 silver_migrated.detail I5 no spurious versions violations=0
+
+93/93 checks passed

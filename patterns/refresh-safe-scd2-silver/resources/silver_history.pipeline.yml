@@ -1,0 +1,16 @@
+resources:
+  pipelines:
+    silver_history:
+      name: silver_history
+      catalog: ${var.catalog}
+      schema: ${var.silver_schema}
+      serverless: true
+      configuration:
+        catalog: ${var.catalog}
+        bronze_schema: ${var.bronze_schema}
+        ops_schema: ${var.ops_schema}
+        allow_full_refresh: "false"
+        tables: ${var.tables}
+      libraries:
+        - file:
+            path: ../src/silver_history.py

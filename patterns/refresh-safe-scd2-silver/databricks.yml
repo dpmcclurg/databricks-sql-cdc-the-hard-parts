@@ -1,0 +1,72 @@
+# Refresh-safe SCD Type 2 Silver over Lakeflow Connect SCD Type 2 Bronze.
+# Default resources are the pattern: the Silver pipeline, a setup job, the recovery job
+# (reset -> tombstone), and the backfill-events job. The `emulation` target adds test-only
+# pipelines that stand in for the connector so the pattern can be proven without a gateway.
+bundle:
+  name: refresh-safe-scd2-silver
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog holding Bronze, Silver, and ops schemas
+  bronze_schema:
+    description: Schema of the Lakeflow Connect SCD Type 2 target tables
+    default: bronze
+  silver_schema:
+    description: Schema of the durable SCD Type 2 Silver tables
+    default: silver
+  ops_schema:
+    description: Schema for tombstone, pin, and legacy-event tables
+    default: silver_ops
+  tables:
+    description: 'JSON: {"<table>": {"keys": [...], "columns": [...]}}'
+
+targets:
+  emulation:
+    mode: development
+    default: true
+    # pass the catalog at deploy time: databricks bundle deploy -t emulation --var catalog=<catalog>
+    variables:
+      tables: '{"detail": {"keys": ["id"], "columns": ["val", "amt"]}, "gldetail": {"keys": ["id"], "columns": ["val", "amt"]}}'
+    resources:
+      pipelines:
+        emulated_bronze:
+          name: emulated_bronze
+          catalog: ${var.catalog}
+          schema: ${var.bronze_schema}
+          serverless: true
+          configuration:
+            catalog: ${var.catalog}
+            source_schema: source
+            tables: ${var.tables}
+          libraries:
+            - file:
+                path: ./tests/emulation/emulated_bronze.py
+        legacy_silver:
+          name: legacy_silver
+          catalog: ${var.catalog}
+          schema: legacy
+          serverless: true
+          configuration:
+            catalog: ${var.catalog}
+            bronze_schema: ${var.bronze_schema}
+            tables: ${var.tables}
+          libraries:
+            - file:
+                path: ./tests/emulation/legacy_silver.py
+        silver_history_migrated:
+          name: silver_history_migrated
+          catalog: ${var.catalog}
+          schema: silver_migrated
+          serverless: true
+          configuration:
+            catalog: ${var.catalog}
+            bronze_schema: ${var.bronze_schema}
+            ops_schema: silver_ops_migrated
+            allow_full_refresh: "true"
+            tables: '{"detail": {"keys": ["id"], "columns": ["val", "amt"], "seed": "${var.catalog}.silver_ops_migrated.detail_legacy_events_test"}}'
+          libraries:
+            - file:
+                path: ./src/silver_history.py
